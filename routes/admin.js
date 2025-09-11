@@ -1,29 +1,70 @@
 import express from 'express';
-import { requireAdmin } from '../middleware/auth.js';
+import { 
+  requireAdmin, requireAdminPage, requireInventoryPage, 
+  requireBankPayments, requireVendorDetails, requireRoleUserCreation 
+} from '../middleware/auth.js';
 import User from '../models/User.js';
 
 const router = express.Router();
 
-// Get all users (admin only)
-router.get('/users', requireAdmin, async (req, res) => {
+// Admin Dashboard Routes
+router.get('/dashboard', requireAdminPage, async (req, res) => {
   try {
-    const users = await User.find({}).select('-password -refreshToken');
-    res.json({ users });
+    res.json({ 
+      message: 'Admin dashboard accessed successfully',
+      user: req.user,
+      permissions: req.user.permissions
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching users' });
+    res.status(500).json({ message: 'Error accessing admin dashboard' });
   }
 });
 
-// Get user by ID (admin only)
-router.get('/users/:userId', requireAdmin, async (req, res) => {
+// Inventory Management Routes
+router.get('/inventory', requireInventoryPage, async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).select('-password -refreshToken');
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.json({ user });
+    res.json({ 
+      message: 'Inventory page accessed successfully',
+      user: req.user
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching user' });
+    res.status(500).json({ message: 'Error accessing inventory page' });
+  }
+});
+
+// Bank Payments Routes
+router.get('/bank-payments', requireBankPayments, async (req, res) => {
+  try {
+    res.json({ 
+      message: 'Bank payments page accessed successfully',
+      user: req.user
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error accessing bank payments' });
+  }
+});
+
+// Vendor Details Routes
+router.get('/vendor-details', requireVendorDetails, async (req, res) => {
+  try {
+    res.json({ 
+      message: 'Vendor details page accessed successfully',
+      user: req.user
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error accessing vendor details' });
+  }
+});
+
+// Role and User Creation Routes
+router.get('/user-management', requireRoleUserCreation, async (req, res) => {
+  try {
+    res.json({ 
+      message: 'User management page accessed successfully',
+      user: req.user
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error accessing user management' });
   }
 });
 
@@ -32,21 +73,33 @@ router.put('/users/:userId/role', requireAdmin, async (req, res) => {
   try {
     const { role } = req.body;
     
-    if (!['user', 'admin'].includes(role)) {
-      return res.status(400).json({ message: 'Invalid role. Must be "user" or "admin"' });
+    const validRoles = ['admin', 'manager', 'employee', 'vendor', 'customer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ 
+        message: `Invalid role. Must be one of: ${validRoles.join(', ')}` 
+      });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
-      { role },
-      { new: true }
-    ).select('-password -refreshToken');
-
+    const user = await User.findById(req.params.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ message: 'User role updated successfully', user });
+    // Update role and let the pre-save middleware handle access level and permissions
+    user.role = role;
+    await user.save();
+
+    res.json({ 
+      message: 'User role updated successfully', 
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        accessLevel: user.accessLevel,
+        permissions: user.permissions
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error updating user role' });
   }
@@ -71,7 +124,10 @@ router.put('/users/:userId/status', requireAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ message: `User ${isActive ? 'activated' : 'deactivated'} successfully`, user });
+    res.json({ 
+      message: `User ${isActive ? 'activated' : 'deactivated'} successfully`, 
+      user 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error updating user status' });
   }
@@ -83,15 +139,26 @@ router.get('/stats', requireAdmin, async (req, res) => {
     const totalUsers = await User.countDocuments();
     const activeUsers = await User.countDocuments({ isActive: true });
     const adminUsers = await User.countDocuments({ role: 'admin' });
+    const managerUsers = await User.countDocuments({ role: 'manager' });
+    const employeeUsers = await User.countDocuments({ role: 'employee' });
+    const vendorUsers = await User.countDocuments({ role: 'vendor' });
+    const customerUsers = await User.countDocuments({ role: 'customer' });
     const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
 
     res.json({
       stats: {
         totalUsers,
         activeUsers,
-        adminUsers,
+        inactiveUsers: totalUsers - activeUsers,
+        roleBreakdown: {
+          admin: adminUsers,
+          manager: managerUsers,
+          employee: employeeUsers,
+          vendor: vendorUsers,
+          customer: customerUsers
+        },
         verifiedUsers,
-        inactiveUsers: totalUsers - activeUsers
+        unverifiedUsers: totalUsers - verifiedUsers
       }
     });
   } catch (error) {

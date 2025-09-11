@@ -6,7 +6,11 @@ import { generateTokens, verifyRefreshToken } from "../utils/jwt.js";
 
 const signup = async (req, res, next) => {
   try {
-    const { name, phone, email, password, address } = req.body;
+    const { 
+      name, phone, email, password, address, pincode, role = 'customer',
+      employeeId, aadharNumber, panCard, joiningDate, terminationDate, 
+      employeeType, companyName, createdBy 
+    } = req.body;
     
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -19,17 +23,58 @@ const signup = async (req, res, next) => {
         .json({ message: "Phone or email already exists" });
     }
 
+    // Check if employeeId already exists (for employee roles)
+    if (employeeId) {
+      const existingEmployee = await User.findOne({ employeeId });
+      if (existingEmployee) {
+        return res
+          .status(400)
+          .json({ message: "Employee ID already exists" });
+      }
+    }
+
     // Hash password
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const user = new User({ 
+    // Create user object with role-specific fields
+    const userData = { 
       name, 
       phone: phone.replace(/\s/g, ""), 
       email: email.toLowerCase(), 
       password: hashedPassword,
-      address 
-    });
+      address,
+      pincode,
+      role,
+      createdBy
+    };
+
+    // Add role-specific fields
+    if (['admin', 'manager', 'employee', 'vendor'].includes(role)) {
+      userData.employeeId = employeeId;
+      userData.aadharNumber = aadharNumber;
+      userData.panCard = panCard;
+      userData.joiningDate = joiningDate;
+      userData.terminationDate = terminationDate;
+      userData.employeeType = employeeType;
+    }
+
+    if (role === 'vendor') {
+      userData.companyName = companyName;
+    }
+
+    const user = new User(userData);
+    
+    // Validate required fields for the role
+    const validation = user.validateRequiredFields();
+    if (!validation.isValid) {
+      return res.status(400).json({
+        message: "Missing required fields for role",
+        missingFields: validation.missingFields,
+        role,
+        requiredFields: user.getRequiredFields()
+      });
+    }
     
     await user.save();
     
@@ -230,4 +275,288 @@ const logout = async (req, res, next) => {
   }
 };
 
-export { signup, generateOTPController, verifyOTPController , login, refreshToken, logout};
+// User Management Controllers
+const createUser = async (req, res, next) => {
+  try {
+    const { 
+      name, phone, email, password, address, pincode, role,
+      employeeId, aadharNumber, panCard, joiningDate, terminationDate, 
+      employeeType, companyName 
+    } = req.body;
+    
+    // Only admin can create users with specific roles
+    if (req.user.role !== 'admin' && role !== 'customer') {
+      return res.status(403).json({ 
+        message: "Only admin can create users with roles other than customer" 
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ phone: phone.replace(/\s/g, "") }, { email: email.toLowerCase() }],
+    });
+    
+    if (existingUser) {
+      return res
+        .status(400)
+        .json({ message: "Phone or email already exists" });
+    }
+
+    // Check if employeeId already exists (for employee roles)
+    if (employeeId) {
+      const existingEmployee = await User.findOne({ employeeId });
+      if (existingEmployee) {
+        return res
+          .status(400)
+          .json({ message: "Employee ID already exists" });
+      }
+    }
+
+    // Hash password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create user object with role-specific fields
+    const userData = { 
+      name, 
+      phone: phone.replace(/\s/g, ""), 
+      email: email.toLowerCase(), 
+      password: hashedPassword,
+      address,
+      pincode,
+      role: role || 'customer',
+      createdBy: req.user.userId
+    };
+
+    // Add role-specific fields
+    if (['admin', 'manager', 'employee', 'vendor'].includes(role)) {
+      userData.employeeId = employeeId;
+      userData.aadharNumber = aadharNumber;
+      userData.panCard = panCard;
+      userData.joiningDate = joiningDate;
+      userData.terminationDate = terminationDate;
+      userData.employeeType = employeeType;
+    }
+
+    if (role === 'vendor') {
+      userData.companyName = companyName;
+    }
+
+    const user = new User(userData);
+    
+    // Validate required fields for the role
+    const validation = user.validateRequiredFields();
+    if (!validation.isValid) {
+      return res.status(400).json({
+        message: "Missing required fields for role",
+        missingFields: validation.missingFields,
+        role,
+        requiredFields: user.getRequiredFields()
+      });
+    }
+    
+    await user.save();
+    
+    // Remove password from response
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshToken;
+    
+    res.status(201).json({ 
+      message: "User created successfully", 
+      user: userResponse
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAllUsers = async (req, res, next) => {
+  try {
+    const { role, isActive, page = 1, limit = 10 } = req.query;
+    const filter = {};
+    
+    if (role) filter.role = role;
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    
+    const skip = (page - 1) * limit;
+    
+    const users = await User.find(filter)
+      .select('-password -refreshToken')
+      .populate('createdBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    const total = await User.countDocuments(filter);
+    
+    res.status(200).json({
+      users,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalUsers: total,
+        hasNext: skip + users.length < total,
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getUserById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await User.findById(id)
+      .select('-password -refreshToken')
+      .populate('createdBy', 'name email role');
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.status(200).json({ user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    // Remove sensitive fields that shouldn't be updated directly
+    delete updateData.password;
+    delete updateData.refreshToken;
+    delete updateData.createdBy;
+    
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Check permissions
+    if (req.user.role !== 'admin' && req.user.userId !== id) {
+      return res.status(403).json({ 
+        message: "You can only update your own profile" 
+      });
+    }
+    
+    // Only admin can change roles
+    if (updateData.role && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: "Only admin can change user roles" 
+      });
+    }
+    
+    // Update user
+    Object.assign(user, updateData);
+    
+    // Validate required fields if role is being changed
+    if (updateData.role) {
+      const validation = user.validateRequiredFields();
+      if (!validation.isValid) {
+        return res.status(400).json({
+          message: "Missing required fields for role",
+          missingFields: validation.missingFields,
+          role: updateData.role,
+          requiredFields: user.getRequiredFields()
+        });
+      }
+    }
+    
+    await user.save();
+    
+    // Remove password from response
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.refreshToken;
+    
+    res.status(200).json({ 
+      message: "User updated successfully", 
+      user: userResponse
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // Only admin can delete users
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: "Only admin can delete users" 
+      });
+    }
+    
+    // Prevent admin from deleting themselves
+    if (req.user.userId === id) {
+      return res.status(400).json({ 
+        message: "Admin cannot delete their own account" 
+      });
+    }
+    
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Soft delete by setting isActive to false
+    user.isActive = false;
+    await user.save();
+    
+    res.status(200).json({ message: "User deactivated successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getRoleConfig = async (req, res, next) => {
+  try {
+    const { role } = req.params;
+    
+    const roleConfig = User.getRoleConfig(role);
+    if (!roleConfig) {
+      return res.status(404).json({ message: "Role not found" });
+    }
+    
+    res.status(200).json({ 
+      role,
+      config: roleConfig
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAllRoles = async (req, res, next) => {
+  try {
+    const roles = Object.keys(User.getRoleConfig('admin') ? 
+      require('../models/User.js').default.schema.paths.role.enumValues : 
+      ['admin', 'manager', 'supervisor', 'employee', 'vendor', 'customer']
+    );
+    
+    const roleConfigs = {};
+    roles.forEach(role => {
+      roleConfigs[role] = User.getRoleConfig(role);
+    });
+    
+    res.status(200).json({ 
+      roles,
+      roleConfigs
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export { 
+  signup, generateOTPController, verifyOTPController, login, refreshToken, logout,
+  createUser, getAllUsers, getUserById, updateUser, deleteUser, getRoleConfig, getAllRoles
+};

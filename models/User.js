@@ -1,7 +1,70 @@
 import mongoose from "mongoose";
 
+// Role-based access control configuration
+const ROLE_ACCESS_LEVELS = {
+  admin: {
+    accessLevel: 'all_sites',
+    permissions: [
+      'admin_page',
+      'inventory_page', 
+      'bank_payments',
+      'vendor_details',
+      'role_user_creation',
+      'app_access',
+      'web_page'
+    ],
+    requiredFields: [
+      'name', 'employeeId', 'phone', 'email', 'address', 'pincode', 'aadharNumber'
+    ]
+  },
+  manager: {
+    accessLevel: 'all_sites',
+    permissions: [
+      'admin_page',
+      'inventory_page',
+      'bank_payments', 
+      'vendor_details'
+    ],
+    requiredFields: [
+      'name', 'employeeId', 'phone', 'email', 'address', 'pincode', 'aadharNumber'
+    ]
+  },
+  employee: {
+    accessLevel: 'restricted',
+    permissions: [
+      'order_pages'
+    ],
+    requiredFields: [
+      'name', 'employeeId', 'phone', 'email', 'address', 'pincode',
+      'aadharNumber', 'panCard', 'joiningDate', 'terminationDate', 'employeeType'
+    ]
+  },
+  vendor: {
+    accessLevel: 'vendor_portal',
+    permissions: [
+      'vendor_portal'
+    ],
+    requiredFields: [
+      'name', 'employeeId', 'phone', 'email', 'address', 'pincode',
+      'aadharNumber', 'panCard', 'joiningDate', 'terminationDate', 
+      'employeeType', 'companyName'
+    ]
+  },
+  customer: {
+    accessLevel: 'app_web',
+    permissions: [
+      'app_access',
+      'web_access'
+    ],
+    requiredFields: [
+      'name'
+    ]
+  }
+};
+
 const userSchema = new mongoose.Schema(
   {
+    // Basic Information (Required for all roles)
     name: {
       type: String,
       required: true,
@@ -30,6 +93,64 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    pincode: {
+      type: String,
+      trim: true,
+    },
+
+    // Role and Access Control
+    role: {
+      type: String,
+      enum: ['admin', 'manager', 'employee', 'vendor', 'customer'],
+      default: 'customer',
+      required: true
+    },
+    accessLevel: {
+      type: String,
+      enum: ['all_sites', 'restricted', 'vendor_portal', 'app_web'],
+      default: 'app_web'
+    },
+    permissions: [{
+      type: String,
+      enum: [
+        'admin_page', 'inventory_page', 'bank_payments', 'vendor_details',
+        'role_user_creation', 'app_access', 'web_page', 'order_pages', 'vendor_portal'
+      ]
+    }],
+
+    // Employee Information (Required for admin, manager, supervisor, employee, vendor)
+    employeeId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values but ensures uniqueness when present
+      trim: true,
+    },
+    aadharNumber: {
+      type: String,
+      trim: true,
+    },
+    panCard: {
+      type: String,
+      trim: true,
+    },
+    joiningDate: {
+      type: Date,
+    },
+    terminationDate: {
+      type: Date,
+    },
+    employeeType: {
+      type: String,
+      enum: ['full_time', 'part_time', 'contract', 'intern'],
+    },
+
+    // Vendor Specific Information
+    companyName: {
+      type: String,
+      trim: true,
+    },
+
+    // Account Status
     isPhoneVerified: {
       type: Boolean,
       default: false,
@@ -42,25 +163,96 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    role: {
-      type: String,
-      enum: ['user', 'admin'],
-      default: 'user'
-    },
+
+    // Authentication
     refreshToken: {
       type: String,
       default: null
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
+
+    // Audit Fields
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
-    updatedAt: {
+    lastLoginAt: {
       type: Date,
-      default: Date.now,
+    },
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
     },
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+// Virtual for account lock status
+userSchema.virtual('isLocked').get(function() {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+});
+
+// Pre-save middleware to set access level and permissions based on role
+userSchema.pre('save', function(next) {
+  if (this.isModified('role')) {
+    const roleConfig = ROLE_ACCESS_LEVELS[this.role];
+    if (roleConfig) {
+      this.accessLevel = roleConfig.accessLevel;
+      this.permissions = roleConfig.permissions;
+    }
+  }
+  next();
+});
+
+// Method to check if user has specific permission
+userSchema.methods.hasPermission = function(permission) {
+  return this.permissions && this.permissions.includes(permission);
+};
+
+// Method to check if user has any of the specified permissions
+userSchema.methods.hasAnyPermission = function(permissions) {
+  if (!this.permissions) return false;
+  return permissions.some(permission => this.permissions.includes(permission));
+};
+
+// Method to get required fields for user's role
+userSchema.methods.getRequiredFields = function() {
+  const roleConfig = ROLE_ACCESS_LEVELS[this.role];
+  return roleConfig ? roleConfig.requiredFields : [];
+};
+
+// Method to validate required fields are present
+userSchema.methods.validateRequiredFields = function() {
+  const requiredFields = this.getRequiredFields();
+  const missingFields = [];
+  
+  requiredFields.forEach(field => {
+    if (!this[field] || (typeof this[field] === 'string' && this[field].trim() === '')) {
+      missingFields.push(field);
+    }
+  });
+  
+  return {
+    isValid: missingFields.length === 0,
+    missingFields
+  };
+};
+
+// Static method to get role configuration
+userSchema.statics.getRoleConfig = function(role) {
+  return ROLE_ACCESS_LEVELS[role] || null;
+};
+
+// Indexes for better performance
+userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ employeeId: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
 
 export default mongoose.model("User", userSchema);
