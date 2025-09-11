@@ -539,7 +539,7 @@ const getAllRoles = async (req, res, next) => {
   try {
     const roles = Object.keys(User.getRoleConfig('admin') ? 
       require('../models/User.js').default.schema.paths.role.enumValues : 
-      ['admin', 'manager', 'supervisor', 'employee', 'vendor', 'customer']
+      ['admin', 'manager', 'employee', 'vendor', 'customer']
     );
     
     const roleConfigs = {};
