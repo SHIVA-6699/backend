@@ -19,10 +19,10 @@ const validate = (req, res, next) => {
   next();
 };
 
-// Custom phone number validator
+// Custom phone number validator for Indian numbers
 const isValidPhoneNumber = (value) => {
-  // Must start with '+' followed by 10-15 digits, no spaces or special characters
-  return /^\+\d{10,15}$/.test(value.replace(/\s/g, ""));
+  // Indian mobile numbers: 10 digits starting with 6,7,8,9
+  return /^[6-9]\d{9}$/.test(value.replace(/\s/g, ""));
 };
 
 // Custom email validator
@@ -37,7 +37,7 @@ router.post(
     check("phone")
       .custom(isValidPhoneNumber)
       .withMessage(
-        "Invalid phone number. Use format: +<country_code><number> (e.g., +917386898469)"
+        "Invalid phone number. Enter 10-digit Indian mobile number (e.g., 9876543210)"
       )
       .customSanitizer((value) => value.replace(/\s/g, "")), // Remove spaces
     check("email")
@@ -66,7 +66,7 @@ router.post(
       .optional()
       .custom(isValidPhoneNumber)
       .withMessage(
-        "Invalid phone number. Use format: +<country_code><number> (e.g., +917386898469)"
+        "Invalid phone number. Enter 10-digit Indian mobile number (e.g., 9876543210)"
       )
       .customSanitizer((value) => value.replace(/\s/g, "")),
   ],
@@ -107,7 +107,7 @@ router.post(
     check("phone")
       .custom(isValidPhoneNumber)
       .withMessage(
-        "Invalid phone number. Use format: +<country_code><number> (e.g., +917386898469)"
+        "Invalid phone number. Enter 10-digit Indian mobile number (e.g., 9876543210)"
       )
       .customSanitizer((value) => value.replace(/\s/g, "")), // Remove spaces
   ],
@@ -121,7 +121,7 @@ router.post(
     check("phone")
       .custom(isValidPhoneNumber)
       .withMessage(
-        "Invalid phone number. Use format: +<country_code><number> (e.g., +917386898469)"
+        "Invalid phone number. Enter 10-digit Indian mobile number (e.g., 9876543210)"
       )
       .customSanitizer((value) => value.replace(/\s/g, "")), // Remove spaces
     check("otp")

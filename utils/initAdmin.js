@@ -15,7 +15,7 @@ export const initializeAdmin = async () => {
     const adminEmail = process.env.ADMIN_EMAIL;
     const adminPassword = process.env.ADMIN_PASSWORD;
     const adminName = process.env.ADMIN_NAME || 'Super Admin';
-    const adminPhone = process.env.ADMIN_PHONE || '+1234567890';
+    const adminPhone = process.env.ADMIN_PHONE || '9876543210';
     const adminAddress = process.env.ADMIN_ADDRESS || 'Company Headquarters';
     const adminPincode = process.env.ADMIN_PINCODE || '000000';
     const adminEmployeeId = process.env.ADMIN_EMPLOYEE_ID || 'ADMIN001';
