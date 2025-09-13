@@ -114,7 +114,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: [
         'admin_page', 'inventory_page', 'bank_payments', 'vendor_details',
-        'role_user_creation', 'app_access', 'web_page', 'order_pages', 'vendor_portal'
+        'role_user_creation', 'app_access', 'web_access', 'order_pages', 'vendor_portal'
       ]
     }],
 
