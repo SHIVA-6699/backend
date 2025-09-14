@@ -11,7 +11,7 @@ const ROLE_ACCESS_LEVELS = {
       'vendor_details',
       'role_user_creation',
       'app_access',
-      'web_page'
+      'web_access'
     ],
     requiredFields: [
       'name', 'employeeId', 'phone', 'email', 'address', 'pincode', 'aadharNumber'
