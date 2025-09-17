@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js'
 import profileRoutes from './routes/profile.js'
 import adminRoutes from './routes/admin.js'
 import userRoutes from './routes/users.js'
+import inventoryRoutes from './routes/inventory.js'
 import { initializeAdmin } from './utils/initAdmin.js';
 import dotenv from "dotenv";
 
@@ -43,6 +44,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/user", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 // Basic Error Handler
 app.use((err, req, res, next) => {

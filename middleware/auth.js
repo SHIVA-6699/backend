@@ -156,5 +156,6 @@ export const requireAppWebAccess = requireAccessLevel(['app_web', 'all_sites', '
 
 // Combined middleware for complex access control
 export const requireAdminOrManager = requireRole(['admin', 'manager']);
+export const requireAdminManagerOrVendor = requireRole(['admin', 'manager', 'vendor']);
 export const requireFinancialAccess = requirePermission(['bank_payments', 'admin_page']);
 export const requireUserManagementAccess = requirePermission(['role_user_creation', 'admin_page']);
