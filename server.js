@@ -28,8 +28,9 @@ connectDB().then(() => {
 // Middleware
 app.use(cors({
   origin: [
+    'https://infraxpertv1.netlify.app',
     'http://localhost:3000',
-    'http://localhost:5173',
+    'http://localhost:5174',
     'https://infraxpert.in',
     'https://admin.infraxpert.in',
     'https://vendor.infraxpert.in',
