@@ -28,7 +28,7 @@ export const generateAccessToken = (user) => {
 // Generate refresh token (long lived - 7 days)
 export const generateRefreshToken = (userId) => {
   return jwt.sign(
-    { userId },
+    { userId: userId._id || userId }, // Only pass the user ID string
     REFRESH_TOKEN_SECRET,
     { expiresIn: '7d' }
   );
