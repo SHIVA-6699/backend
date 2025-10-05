@@ -10,6 +10,7 @@ import profileRoutes from './routes/profile.js'
 import adminRoutes from './routes/admin.js'
 import userRoutes from './routes/users.js'
 import inventoryRoutes from './routes/inventory.js'
+import orderRoutes from './routes/order.js'
 import { initializeAdmin } from './utils/initAdmin.js';
 import dotenv from "dotenv";
 
@@ -31,6 +32,7 @@ app.use(cors({
     'https://infraxpertv1.netlify.app',
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://localhost:5174',
     'https://infraxpert.in',
     'https://admin.infraxpert.in',
     'https://vendor.infraxpert.in',
@@ -49,6 +51,7 @@ app.use("/api/user", profileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/order", orderRoutes);
 
 // Basic Error Handler
 app.use((err, req, res, next) => {
