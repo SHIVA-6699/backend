@@ -31,7 +31,16 @@ import {
   getOrdersByDateRange,
   cancelOrder,
   getPaymentStats,
-  getDeliveryStats
+  getDeliveryStats,
+  markPaymentDone,
+  confirmOrder,
+  updateOrderStatus,
+  getPaymentDetails,
+  getAllPayments,
+  updateDelivery,
+  getDeliveryDetails,
+  markDelivered,
+  getStatusHistory
 } from '../controllers/order/admin.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/auth.js';
@@ -326,6 +335,48 @@ router.put('/vendor/orders/:leadId/delivery',
 
 // ==================== ADMIN ROUTES ====================
 
+// Admin stats routes (Must be BEFORE dynamic routes)
+router.get('/admin/orders/stats',
+  authenticateToken,
+  requireRole(['admin']),
+  getOrderStats
+);
+
+router.get('/admin/payments/stats',
+  authenticateToken,
+  requireRole(['admin']),
+  getPaymentStats
+);
+
+router.get('/admin/deliveries/stats',
+  authenticateToken,
+  requireRole(['admin']),
+  getDeliveryStats
+);
+
+// Get orders by date range
+router.get('/admin/orders/date-range',
+  authenticateToken,
+  requireRole(['admin']),
+  [
+    query('startDate')
+      .isISO8601()
+      .withMessage('Valid start date is required'),
+    query('endDate')
+      .isISO8601()
+      .withMessage('Valid end date is required'),
+    query('page')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Page must be a positive integer'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('Limit must be between 1 and 100')
+  ],
+  getOrdersByDateRange
+);
+
 // Get all orders
 router.get('/admin/orders',
   authenticateToken,
@@ -355,32 +406,19 @@ router.get('/admin/orders',
   getAllOrders
 );
 
-// Get single order details (Admin)
-router.get('/admin/orders/:leadId',
-  authenticateToken,
-  requireRole(['admin']),
-  leadIdValidation,
-  getAdminOrderDetails
-);
-
-// Get order statistics
-router.get('/admin/orders/stats',
-  authenticateToken,
-  requireRole(['admin']),
-  getOrderStats
-);
-
-// Get orders by date range
-router.get('/admin/orders/date-range',
+// Get all payments
+router.get('/admin/payments',
   authenticateToken,
   requireRole(['admin']),
   [
-    query('startDate')
-      .isISO8601()
-      .withMessage('Valid start date is required'),
-    query('endDate')
-      .isISO8601()
-      .withMessage('Valid end date is required'),
+    query('paymentStatus')
+      .optional()
+      .isIn(['pending', 'completed', 'failed', 'refunded'])
+      .withMessage('Valid payment status is required'),
+    query('paymentMethod')
+      .optional()
+      .isString()
+      .withMessage('Payment method must be a string'),
     query('page')
       .optional()
       .isInt({ min: 1 })
@@ -390,7 +428,147 @@ router.get('/admin/orders/date-range',
       .isInt({ min: 1, max: 100 })
       .withMessage('Limit must be between 1 and 100')
   ],
-  getOrdersByDateRange
+  getAllPayments
+);
+
+// Get single order details (Admin)
+router.get('/admin/orders/:leadId',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  getAdminOrderDetails
+);
+
+// Get order status history
+router.get('/admin/orders/:leadId/status-history',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  getStatusHistory
+);
+
+// Get payment details for specific order
+router.get('/admin/payments/:leadId',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  getPaymentDetails
+);
+
+// Get delivery details for specific order
+router.get('/admin/deliveries/:leadId',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  getDeliveryDetails
+);
+
+// Mark payment as done (Manual payment confirmation)
+router.post('/admin/orders/:leadId/payment',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  [
+    body('paidAmount')
+      .isFloat({ min: 0.01 })
+      .withMessage('Valid paid amount is required'),
+    body('paymentMethod')
+      .optional()
+      .isIn(['credit_card', 'debit_card', 'upi', 'net_banking', 'wallet', 'cash_on_delivery', 'bank_transfer'])
+      .withMessage('Valid payment method is required'),
+    body('transactionId')
+      .optional()
+      .isString()
+      .withMessage('Transaction ID must be a string'),
+    body('paymentDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Valid payment date is required'),
+    body('remarks')
+      .optional()
+      .isString()
+      .withMessage('Remarks must be a string')
+  ],
+  markPaymentDone
+);
+
+// Confirm order after payment
+router.post('/admin/orders/:leadId/confirm',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  [
+    body('remarks')
+      .optional()
+      .isString()
+      .withMessage('Remarks must be a string')
+  ],
+  confirmOrder
+);
+
+// Update order status manually
+router.put('/admin/orders/:leadId/status',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  [
+    body('orderStatus')
+      .isIn(['pending', 'vendor_accepted', 'payment_done', 'order_confirmed', 'truck_loading', 'in_transit', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'])
+      .withMessage('Valid order status is required'),
+    body('remarks')
+      .optional()
+      .isString()
+      .withMessage('Remarks must be a string')
+  ],
+  updateOrderStatus
+);
+
+// Update delivery information
+router.put('/admin/orders/:leadId/delivery',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  [
+    body('deliveryStatus')
+      .optional()
+      .isIn(['pending', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'failed', 'returned'])
+      .withMessage('Valid delivery status is required'),
+    body('trackingNumber')
+      .optional()
+      .isString()
+      .withMessage('Tracking number must be a string'),
+    body('courierService')
+      .optional()
+      .isString()
+      .withMessage('Courier service must be a string'),
+    body('expectedDeliveryDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Valid expected delivery date is required')
+  ],
+  updateDelivery
+);
+
+// Mark order as delivered
+router.post('/admin/orders/:leadId/delivered',
+  authenticateToken,
+  requireRole(['admin']),
+  leadIdValidation,
+  [
+    body('deliveredDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Valid delivered date is required'),
+    body('receivedBy')
+      .optional()
+      .isString()
+      .withMessage('Received by must be a string'),
+    body('remarks')
+      .optional()
+      .isString()
+      .withMessage('Remarks must be a string')
+  ],
+  markDelivered
 );
 
 // Cancel order (Admin)
@@ -405,20 +583,6 @@ router.post('/admin/orders/:leadId/cancel',
       .withMessage('Reason must be a string')
   ],
   cancelOrder
-);
-
-// Get payment statistics
-router.get('/admin/payments/stats',
-  authenticateToken,
-  requireRole(['admin']),
-  getPaymentStats
-);
-
-// Get delivery statistics
-router.get('/admin/deliveries/stats',
-  authenticateToken,
-  requireRole(['admin']),
-  getDeliveryStats
 );
 
 export default router;
