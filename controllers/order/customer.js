@@ -542,3 +542,148 @@ export const getPaymentStatus = async (req, res) => {
     });
   }
 };
+
+// Get order tracking information (Customer)
+export const getOrderTracking = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const customerId = req.user.userId;
+
+    // Find the order
+    const order = await Order.findOne({
+      leadId,
+      custUserId: customerId,
+      isActive: true
+    })
+      .populate('vendorId', 'name email phone companyName')
+      .populate('items.itemCode', 'itemDescription category subCategory primaryImage');
+
+    if (!order) {
+      return res.status(404).json({
+        message: 'Order not found'
+      });
+    }
+
+    // Get status history
+    const statusHistory = await OrderStatus.getOrderStatusHistory(leadId);
+
+    // Get delivery information
+    const delivery = await OrderDelivery.findByOrder(leadId);
+
+    // Get payment information
+    const payment = await OrderPayment.findByInvoice(order.invcNum);
+
+    // Build tracking response
+    const trackingInfo = {
+      order: {
+        leadId: order.leadId,
+        formattedLeadId: order.formattedLeadId,
+        invcNum: order.invcNum,
+        orderStatus: order.orderStatus,
+        orderDate: order.orderDate,
+        totalAmount: order.totalAmount,
+        totalQty: order.totalQty,
+        deliveryAddress: order.deliveryAddress,
+        deliveryPincode: order.deliveryPincode,
+        deliveryExpectedDate: order.deliveryExpectedDate
+      },
+      vendor: order.vendorId ? {
+        name: order.vendorId.name,
+        companyName: order.vendorId.companyName,
+        phone: order.vendorId.phone,
+        email: order.vendorId.email
+      } : null,
+      items: order.items.map(item => ({
+        itemDescription: item.itemCode?.itemDescription,
+        category: item.itemCode?.category,
+        subCategory: item.itemCode?.subCategory,
+        primaryImage: item.itemCode?.primaryImage,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        totalCost: item.totalCost
+      })),
+      currentStatus: {
+        status: order.orderStatus,
+        statusLabel: getStatusLabel(order.orderStatus),
+        statusDescription: getStatusDescription(order.orderStatus),
+        lastUpdated: statusHistory[statusHistory.length - 1]?.updateDate || order.orderDate
+      },
+      statusTimeline: statusHistory.map(status => ({
+        status: status.orderStatus,
+        statusLabel: getStatusLabel(status.orderStatus),
+        remarks: status.remarks,
+        date: status.updateDate
+      })),
+      delivery: delivery ? {
+        deliveryStatus: delivery.deliveryStatus,
+        trackingNumber: delivery.trackingNumber,
+        courierService: delivery.courierService,
+        trackingUrl: delivery.trackingUrl,
+        expectedDeliveryDate: delivery.expectedDeliveryDate,
+        deliveredDate: delivery.deliveredDate,
+        address: delivery.address,
+        pincode: delivery.pincode
+      } : null,
+      payment: payment ? {
+        paymentStatus: payment.paymentStatus,
+        paymentMethod: payment.paymentType,
+        paidAmount: payment.paidAmount,
+        paymentDate: payment.paymentDate,
+        transactionId: payment.transactionId
+      } : {
+        paymentStatus: 'pending',
+        paymentMethod: null,
+        paidAmount: 0,
+        paymentDate: null
+      },
+      estimatedDelivery: order.deliveryExpectedDate,
+      canCancel: ['pending', 'vendor_accepted'].includes(order.orderStatus)
+    };
+
+    res.status(200).json({
+      message: 'Order tracking information retrieved successfully',
+      tracking: trackingInfo
+    });
+
+  } catch (error) {
+    console.error('Get order tracking error:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to get status label
+function getStatusLabel(status) {
+  const labels = {
+    'pending': 'Order Placed',
+    'vendor_accepted': 'Order Accepted by Vendor',
+    'payment_done': 'Payment Completed',
+    'order_confirmed': 'Order Confirmed',
+    'truck_loading': 'Loading for Dispatch',
+    'in_transit': 'In Transit',
+    'shipped': 'Shipped',
+    'out_for_delivery': 'Out for Delivery',
+    'delivered': 'Delivered',
+    'cancelled': 'Cancelled'
+  };
+  return labels[status] || status;
+}
+
+// Helper function to get status description
+function getStatusDescription(status) {
+  const descriptions = {
+    'pending': 'Your order has been placed and is waiting for vendor confirmation.',
+    'vendor_accepted': 'Vendor has accepted your order and will process it soon.',
+    'payment_done': 'Payment has been received and verified.',
+    'order_confirmed': 'Your order is confirmed and being prepared for dispatch.',
+    'truck_loading': 'Your order is being loaded for dispatch.',
+    'in_transit': 'Your order is on the way to the delivery location.',
+    'shipped': 'Your order has been shipped and is in transit.',
+    'out_for_delivery': 'Your order is out for delivery and will reach you soon.',
+    'delivered': 'Your order has been delivered successfully.',
+    'cancelled': 'This order has been cancelled.'
+  };
+  return descriptions[status] || 'Order status information';
+}

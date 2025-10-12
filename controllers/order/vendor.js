@@ -381,3 +381,94 @@ export const getPendingOrders = async (req, res) => {
     });
   }
 };
+
+// Update order status (Vendor - for shipping statuses)
+export const updateVendorOrderStatus = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const vendorId = req.user.userId;
+    const { orderStatus, remarks } = req.body;
+
+    if (!orderStatus) {
+      return res.status(400).json({
+        message: 'Order status is required'
+      });
+    }
+
+    // Vendor can only update to specific statuses (shipping-related)
+    const allowedStatuses = [
+      'truck_loading',
+      'in_transit', 
+      'shipped',
+      'out_for_delivery',
+      'delivered'
+    ];
+
+    if (!allowedStatuses.includes(orderStatus)) {
+      return res.status(400).json({
+        message: `Vendors can only update status to: ${allowedStatuses.join(', ')}`
+      });
+    }
+
+    // Find the order
+    const order = await Order.findOne({
+      leadId,
+      vendorId,
+      isActive: true
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: 'Order not found or you do not have permission to update this order'
+      });
+    }
+
+    // Check if order is in a state where vendor can update
+    const allowedCurrentStatuses = ['order_confirmed', 'truck_loading', 'in_transit', 'shipped', 'out_for_delivery'];
+    if (!allowedCurrentStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        message: `Cannot update order status from ${order.orderStatus}. Order must be confirmed first.`
+      });
+    }
+
+    // Update order status
+    await order.updateStatus(orderStatus);
+
+    // Create status update
+    await OrderStatus.createStatusUpdate(
+      order.leadId,
+      order.invcNum,
+      order.vendorId,
+      orderStatus,
+      vendorId,
+      remarks || `Order status updated to ${orderStatus} by vendor`
+    );
+
+    // If status is delivered, update delivery record
+    if (orderStatus === 'delivered') {
+      let delivery = await OrderDelivery.findByOrder(leadId);
+      if (delivery) {
+        delivery.deliveryStatus = 'delivered';
+        delivery.deliveredDate = new Date();
+        await delivery.save();
+      }
+    }
+
+    res.status(200).json({
+      message: 'Order status updated successfully',
+      order: {
+        leadId: order.leadId,
+        orderStatus: order.orderStatus,
+        totalAmount: order.totalAmount,
+        formattedLeadId: order.formattedLeadId
+      }
+    });
+
+  } catch (error) {
+    console.error('Update vendor order status error:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};

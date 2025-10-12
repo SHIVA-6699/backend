@@ -9,7 +9,8 @@ import {
   removeFromCart,
   placeOrder,
   processPayment,
-  getPaymentStatus
+  getPaymentStatus,
+  getOrderTracking
 } from '../controllers/order/customer.js';
 
 import {
@@ -20,7 +21,8 @@ import {
   rejectOrder,
   updateDeliveryTracking,
   getVendorOrderStats,
-  getPendingOrders
+  getPendingOrders,
+  updateVendorOrderStatus
 } from '../controllers/order/vendor.js';
 
 import {
@@ -241,6 +243,13 @@ router.get('/customer/orders/:leadId/payment',
   getPaymentStatus
 );
 
+// Get order tracking (Customer)
+router.get('/customer/orders/:leadId/tracking',
+  authenticateToken,
+  leadIdValidation,
+  getOrderTracking
+);
+
 // ==================== VENDOR ROUTES ====================
 
 // Get vendor order statistics (Must be BEFORE /:leadId)
@@ -331,6 +340,23 @@ router.put('/vendor/orders/:leadId/delivery',
   leadIdValidation,
   updateDeliveryTrackingValidation,
   updateDeliveryTracking
+);
+
+// Update order status (Vendor - for shipping statuses)
+router.put('/vendor/orders/:leadId/status',
+  authenticateToken,
+  requireRole(['vendor']),
+  leadIdValidation,
+  [
+    body('orderStatus')
+      .isIn(['truck_loading', 'in_transit', 'shipped', 'out_for_delivery', 'delivered'])
+      .withMessage('Valid order status is required. Vendors can update to: truck_loading, in_transit, shipped, out_for_delivery, delivered'),
+    body('remarks')
+      .optional()
+      .isString()
+      .withMessage('Remarks must be a string')
+  ],
+  updateVendorOrderStatus
 );
 
 // ==================== ADMIN ROUTES ====================
