@@ -450,32 +450,58 @@ export const markPaymentDone = async (req, res) => {
       });
     }
 
+    // Map paymentMethod to paymentType and paymentMode
+    const paymentMapping = {
+      'credit_card': { paymentType: 'credit_card', paymentMode: 'online' },
+      'debit_card': { paymentType: 'debit_card', paymentMode: 'online' },
+      'upi': { paymentType: 'upi', paymentMode: 'online' },
+      'net_banking': { paymentType: 'net_banking', paymentMode: 'online' },
+      'wallet': { paymentType: 'wallet', paymentMode: 'online' },
+      'cash_on_delivery': { paymentType: 'cash_on_delivery', paymentMode: 'cash_on_delivery' },
+      'bank_transfer': { paymentType: 'bank_transfer', paymentMode: 'offline' }
+    };
+
+    const paymentInfo = paymentMapping[paymentMethod] || { 
+      paymentType: 'bank_transfer', 
+      paymentMode: 'offline' 
+    };
+
     // Create or update payment record
     let payment = await OrderPayment.findOne({ invcNum: order.invcNum });
     
     if (payment) {
       // Update existing payment
       payment.paidAmount = paidAmount;
-      payment.paymentStatus = 'completed';
+      payment.paymentStatus = 'successful';
+      payment.paymentType = paymentInfo.paymentType;
+      payment.paymentMode = paymentInfo.paymentMode;
       payment.paymentMethod = paymentMethod;
-      payment.transactionId = transactionId;
+      if (transactionId) {
+        payment.transactionId = transactionId;
+        payment.utrNum = transactionId; // Store as UTR for bank transfers
+      }
       payment.paymentDate = paymentDate;
       await payment.save();
     } else {
       // Create new payment record
-      payment = await OrderPayment.create({
-        leadId: order.leadId,
+      const paymentData = {
         invcNum: order.invcNum,
-        custUserId: order.custUserId,
-        vendorId: order.vendorId,
-        totalAmount: order.totalAmount,
+        paymentType: paymentInfo.paymentType,
+        paymentMode: paymentInfo.paymentMode,
+        paymentStatus: 'successful',
+        orderAmount: order.totalAmount,
         paidAmount: paidAmount,
-        paymentStatus: 'completed',
         paymentMethod: paymentMethod,
-        transactionId: transactionId,
-        paymentDate: paymentDate,
-        orderAmount: order.totalAmount
-      });
+        paymentDate: paymentDate
+      };
+
+      // Add transactionId if provided, otherwise let default generate
+      if (transactionId) {
+        paymentData.transactionId = transactionId;
+        paymentData.utrNum = transactionId; // Store as UTR for bank transfers
+      }
+
+      payment = await OrderPayment.create(paymentData);
     }
 
     // Update order status to payment_done
@@ -499,11 +525,12 @@ export const markPaymentDone = async (req, res) => {
         totalAmount: order.totalAmount
       },
       payment: {
-        leadId: payment.leadId,
+        transactionId: payment.transactionId,
         paidAmount: payment.paidAmount,
         paymentStatus: payment.paymentStatus,
-        paymentMethod: payment.paymentMethod,
-        transactionId: payment.transactionId
+        paymentType: payment.paymentType,
+        paymentMode: payment.paymentMode,
+        paymentDate: payment.paymentDate
       }
     });
 

@@ -413,7 +413,7 @@ router.get('/admin/payments',
   [
     query('paymentStatus')
       .optional()
-      .isIn(['pending', 'completed', 'failed', 'refunded'])
+      .isIn(['pending', 'processing', 'successful', 'failed', 'cancelled', 'refunded', 'partially_refunded'])
       .withMessage('Valid payment status is required'),
     query('paymentMethod')
       .optional()
