@@ -299,7 +299,7 @@ export const getVendorOrderStats = async (req, res) => {
     const vendorId = req.user.userId;
 
     const stats = await Order.aggregate([
-      { $match: { vendorId: new mongoose.Types.ObjectId(vendorId), isActive: true } },
+      { $match: { vendorId: vendorId, isActive: true } },
       {
         $group: {
           _id: '$orderStatus',
@@ -311,16 +311,16 @@ export const getVendorOrderStats = async (req, res) => {
 
     const totalOrders = await Order.countDocuments({ vendorId, isActive: true });
     const totalRevenue = await Order.aggregate([
-      { $match: { vendorId: new mongoose.Types.ObjectId(vendorId), isActive: true, orderStatus: { $in: ['order_confirmed', 'shipped', 'delivered'] } } },
+      { $match: { vendorId: vendorId, isActive: true, orderStatus: { $in: ['order_confirmed', 'shipped', 'delivered'] } } },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } }
     ]);
 
     res.status(200).json({
       message: 'Vendor order statistics retrieved successfully',
       stats: {
-        totalOrders,
+        totalOrders: totalOrders || 0,
         totalRevenue: totalRevenue[0]?.total || 0,
-        statusBreakdown: stats
+        statusBreakdown: stats || []
       }
     });
 

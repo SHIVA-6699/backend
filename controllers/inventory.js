@@ -835,11 +835,11 @@ export const getInventoryStats = async (req, res, next) => {
 
     res.status(200).json({
       stats: {
-        totalItems,
-        totalPrices,
-        totalShipPrices,
-        activePromos,
-        categoryBreakdown: categoryStats
+        totalItems: totalItems || 0,
+        totalPrices: totalPrices || 0,
+        totalShipPrices: totalShipPrices || 0,
+        activePromos: activePromos || 0,
+        categoryBreakdown: categoryStats || []
       }
     });
   } catch (error) {

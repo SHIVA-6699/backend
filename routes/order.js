@@ -234,6 +234,30 @@ router.get('/customer/orders/:leadId/payment',
 
 // ==================== VENDOR ROUTES ====================
 
+// Get vendor order statistics (Must be BEFORE /:leadId)
+router.get('/vendor/orders/stats',
+  authenticateToken,
+  requireRole(['vendor']),
+  getVendorOrderStats
+);
+
+// Get pending orders for vendor (Must be BEFORE /:leadId)
+router.get('/vendor/orders/pending',
+  authenticateToken,
+  requireRole(['vendor']),
+  [
+    query('page')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Page must be a positive integer'),
+    query('limit')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('Limit must be between 1 and 100')
+  ],
+  getPendingOrders
+);
+
 // Get vendor's orders
 router.get('/vendor/orders',
   authenticateToken,
@@ -255,36 +279,12 @@ router.get('/vendor/orders',
   getVendorOrders
 );
 
-// Get single vendor order details
+// Get single vendor order details (Must be AFTER specific routes)
 router.get('/vendor/orders/:leadId',
   authenticateToken,
   requireRole(['vendor']),
   leadIdValidation,
   getVendorOrderDetails
-);
-
-// Get pending orders for vendor
-router.get('/vendor/orders/pending',
-  authenticateToken,
-  requireRole(['vendor']),
-  [
-    query('page')
-      .optional()
-      .isInt({ min: 1 })
-      .withMessage('Page must be a positive integer'),
-    query('limit')
-      .optional()
-      .isInt({ min: 1, max: 100 })
-      .withMessage('Limit must be between 1 and 100')
-  ],
-  getPendingOrders
-);
-
-// Get vendor order statistics
-router.get('/vendor/orders/stats',
-  authenticateToken,
-  requireRole(['vendor']),
-  getVendorOrderStats
 );
 
 // Accept order

@@ -197,11 +197,11 @@ export const getOrderStats = async (req, res) => {
     res.status(200).json({
       message: 'Order statistics retrieved successfully',
       stats: {
-        totalOrders,
+        totalOrders: totalOrders || 0,
         totalRevenue: totalRevenue[0]?.total || 0,
-        statusBreakdown: stats,
-        topVendors: vendorStats,
-        topCustomers: customerStats
+        statusBreakdown: stats || [],
+        topVendors: vendorStats || [],
+        topCustomers: customerStats || []
       }
     });
 
@@ -352,10 +352,10 @@ export const getPaymentStats = async (req, res) => {
     res.status(200).json({
       message: 'Payment statistics retrieved successfully',
       stats: {
-        totalPayments,
-        successfulPayments,
+        totalPayments: totalPayments || 0,
+        successfulPayments: successfulPayments || 0,
         totalRevenue: totalRevenue[0]?.total || 0,
-        paymentStatusBreakdown: paymentStats
+        paymentStatusBreakdown: paymentStats || []
       }
     });
 
@@ -395,10 +395,10 @@ export const getDeliveryStats = async (req, res) => {
     res.status(200).json({
       message: 'Delivery statistics retrieved successfully',
       stats: {
-        totalDeliveries,
-        completedDeliveries,
-        pendingDeliveries,
-        deliveryStatusBreakdown: deliveryStats
+        totalDeliveries: totalDeliveries || 0,
+        completedDeliveries: completedDeliveries || 0,
+        pendingDeliveries: pendingDeliveries || 0,
+        deliveryStatusBreakdown: deliveryStats || []
       }
     });
 
